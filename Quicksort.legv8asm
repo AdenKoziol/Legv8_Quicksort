@@ -1,0 +1,254 @@
+//Variables used persistently throughout this program:
+//*a = X0, n = X1, f = X2, l = X3, i = X4, j = X5, p = X6
+
+
+ADD X0, XZR, XZR              //set array base address at memory location 0
+ADDI X1, XZR, #20             //X1 = array length = 20
+
+SUBI SP, SP, #80              //move stack pointer for space to save X19 - X27 and LR
+
+STUR X19, [SP, #0]            //save X19 - X27 and LR to the stack
+STUR X20, [SP, #8]
+STUR X21, [SP, #16]
+STUR X22, [SP, #24]
+STUR X23, [SP, #32]
+STUR X24, [SP, #40]
+STUR X25, [SP, #48]
+STUR X26, [SP, #56]
+STUR X27, [SP, #64]
+STUR LR, [SP, #72]
+
+ADD X19, SP, XZR               //save current location of the stack pointer
+
+BL fill                        //fill the array
+BL quicksort                   //call quicksort
+
+ADD SP, X19, XZR               //Restore the stack pointer
+
+LDUR X19, [SP, #0]             //Restore X19 - X27 and LR to their original values
+LDUR X20, [SP, #8]
+LDUR X21, [SP, #16]
+LDUR X22, [SP, #24]
+LDUR X23, [SP, #32]
+LDUR X24, [SP, #40]
+LDUR X25, [SP, #48]
+LDUR X26, [SP, #56]
+LDUR X27, [SP, #64]
+LDUR LR, [SP, #72]
+
+ADDI SP, SP, #80               //move stack pointer to original value before this program
+
+
+//After execution, the sorted array is saved at the start of main memory and the program has two results:
+//Array base address pointer -- *a = X0
+//array length -- n = X1
+
+
+B end                          //jump to end and HALT
+
+
+next_i:
+    B next_i_loop
+
+next_i_loop:
+    SUBS XZR, X4, X3
+    B.GT next_i_end           //end if (i > l)
+
+    LSL X9, X4, #3            //X9 = i * 8
+    ADD X9, X9, X0            //X9 = address of a[i]
+    LDUR X10, [X9, #0]        //X10 = a[i]
+
+    SUBS XZR, X10, X6         //end if a[i] >= p
+    B.GE next_i_end
+
+    ADDI X4, X4, #1           //i++
+    B next_i_loop
+
+next_i_end:
+    BR LR
+
+next_j:
+    B next_j_loop
+
+next_j_loop:
+    SUBS XZR, X2, X5
+    B.GE next_j_end           //end if (f >= j)
+
+    LSL X9, X5, #3            //X9 = j * 8
+    ADD X9, X9, X0            //X9 = address of a[j]
+    LDUR X10, [X9, #0]        //X10 = a[j]
+
+    SUBS XZR, X10, X6         //end if a[j] < p
+    B.LT next_j_end
+
+    SUBI X5, X5, #1           //j--
+    B next_j_loop
+
+next_j_end:
+    BR LR
+
+swap:
+                              //X22 = swap1 and X23 = swap2 used to preserve values f, i, and j
+    LSL X9, X22, #3           //X9 = swap1 * 8
+    LSL X10, X23, #3          //X10 = swap2 * 8
+    ADD X9, X9, X0            //X9 = Memory address of a[swap1]
+    ADD X10, X10, X0          //X10 = Memory address of a[swap2]
+
+    LDUR X11, [X9, #0]        // X11 = a[swap1]
+    LDUR X12, [X10, #0]       // X12 = a[swap2]
+
+    STUR X12, [X9, #0]        // Store a[swap2] in a[swap1]
+    STUR X11, [X10, #0]       // Store a[swap1] in a[swap2]
+    
+    BR LR
+
+partition:
+    ADD X20, LR, XZR          //save LR in unused register X20
+
+    LSL X9, X2, #3            //X9 = f * 8
+    ADD X9, X9, X0            //X9 = memory address of a[f]
+    LDUR X6, [X9, #0]         //p = a[f]
+
+    ADDI X4, X2, #1           //i = f + 1
+    ADD X5, X3, XZR           //j = l
+
+    B partition_loop
+
+partition_loop:
+    SUBS XZR, X4, X5
+    B.GT partition_end        //end if i > j
+
+    BL next_i
+    BL next_j
+
+    SUBS XZR, X4, X5 
+    B.GE partition_loop_swap  //only swap if (i < j), otherwise skip to next loop iteration
+
+    ADD X22, X4, XZR          //swap1 = i
+    ADD X23, X5, XZR          //swap2 = j
+    BL swap
+
+    partition_loop_swap:
+    B partition_loop
+
+partition_end:
+    SUBS XZR, X5, X2
+    B.EQ skip_swap_if_equal   //only swap if (j != f), otherwise skip ahead to return
+    
+    ADD X22, X5, XZR          //swap1 = j
+    ADD X23, X2, XZR          //swap2 = f
+    BL swap
+    
+    skip_swap_if_equal:
+
+    ADD X6, X5, XZR           //return p = j
+    ADD LR, X20, XZR          //restore LR
+    BR LR                     //return to wherever partition was called
+
+quicksort:
+    ADD X21, LR, XZR          //preserve LR in an unused register X21
+
+    ADD X2, XZR, XZR          //f = 0
+    SUBI X3, X1, #1           //l = n - 1
+
+    BL quicksort_recurse
+
+    ADD LR, X21, XZR          //restore LR
+    BR LR 
+
+quicksort_recurse:
+    SUBI SP, SP, #24          //make room on the stack for 3 integers
+    STUR LR, [SP, #16]        //push LR to the stack
+    STUR X2, [SP, #8]         //push f to the stack
+    STUR X3, [SP, #0]         //push l to the stack
+
+    SUBS XZR, X2, X3
+    B.GE recurse_end          // end if f >= l
+
+    BL partition
+
+    SUBI X3, X6, #1           //l = p - 1
+    BL quicksort_recurse      // recurse(a, f, p - 1)
+
+    ADDI SP, SP, #24          //fix stack pointer
+    LDUR LR, [SP, #16]        //restore LR  
+    LDUR X2, [SP, #8]         //restore f
+    LDUR X3, [SP, #0]         //restore l
+    
+    ADDI X2, X6, #1           //f = p + 1
+    BL quicksort_recurse      // recurse(a, p + 1, l)
+
+    ADDI SP, SP, #24          //fix stack pointer
+    LDUR LR, [SP, #16]        //restore LR  
+    LDUR X2, [SP, #8]         //restore f
+    LDUR X3, [SP, #0]         //restore l
+
+recurse_end:
+    BR LR                     //return
+
+fill:                         //currently set to fill array with values 1 - 20 in a random order
+                              //the ADDI immediate values can be changed to test quicksort with any array of integers
+    ADDI X9, XZR, #2
+    STUR X9, [X0, #0]
+
+    ADDI X9, XZR, #19
+    STUR X9, [X0, #8]
+
+    ADDI X9, XZR, #18
+    STUR X9, [X0, #16]
+
+    ADDI X9, XZR, #11
+    STUR X9, [X0, #24]
+
+    ADDI X9, XZR, #4
+    STUR X9, [X0, #32]
+
+    ADDI X9, XZR, #6
+    STUR X9, [X0, #40]
+
+    ADDI X9, XZR, #3
+    STUR X9, [X0, #48]
+
+    ADDI X9, XZR, #15
+    STUR X9, [X0, #56]
+
+    ADDI X9, XZR, #12
+    STUR X9, [X0, #64]
+
+    ADDI X9, XZR, #8
+    STUR X9, [X0, #72]
+
+    ADDI X9, XZR, #9
+    STUR X9, [X0, #80]
+
+    ADDI X9, XZR, #1
+    STUR X9, [X0, #88]
+
+    ADDI X9, XZR, #16
+    STUR X9, [X0, #96]
+
+    ADDI X9, XZR, #20
+    STUR X9, [X0, #104]
+
+    ADDI X9, XZR, #7
+    STUR X9, [X0, #112]
+
+    ADDI X9, XZR, #13
+    STUR X9, [X0, #120]
+
+    ADDI X9, XZR, #14
+    STUR X9, [X0, #128]
+
+    ADDI X9, XZR, #10
+    STUR X9, [X0, #136]
+
+    ADDI X9, XZR, #5
+    STUR X9, [X0, #144]
+
+    ADDI X9, XZR, #17
+    STUR X9, [X0, #152]
+
+    BR LR
+
+end:
+    HALT
